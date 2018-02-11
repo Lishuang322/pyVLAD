@@ -1,8 +1,8 @@
 # implementation of VLAD ballTree algorithms for CBIR
-# Jorge Guevara
-# jorged@br.ibm.com
+# Jorge Guevara - jorged@br.ibm.com
+# Mikel Bober-Irizar - mikel@mxbi.net
 
-import numpy as np 
+import numpy as np
 import itertools
 from sklearn.cluster import KMeans
 from sklearn.neighbors import BallTree
@@ -11,28 +11,47 @@ import glob
 import cv2
 from VLADlib.Descriptors import *
 from tqdm import tqdm
+import multiprocessing
 
 
 # inputs
 # getDescriptors for whole dataset
 # Path = path to the image dataset
 # functionHandleDescriptor={describeSURF, describeSIFT, describeORB}
-def getDescriptors(path,functionHandleDescriptor):
-    descriptors=list()
 
-    print('Searching for files...')
+def getSingleImageDescriptor(args):
+    imagePath, functionHandleDescriptor = args
+    im = cv2.imread(imagePath)
+    kp, des = functionHandleDescriptor(im)
+    return des
+
+def getDescriptors(path, functionHandleDescriptor, threads):
+    print('Searching for images...')
     files = glob.glob(path + "/*.jpg")
-    print('Found {} files...'.format(len(files)))
-    for imagePath in tqdm(files):
-        print(imagePath)
-        im=cv2.imread(imagePath)
-        kp,des = functionHandleDescriptor(im)
-        if des is not None:
-            descriptors.append(des)
-            #print(len(kp))
-        
-    #flatten list       
-    descriptors = list(itertools.chain.from_iterable(descriptors))
+    print('Found {} images...'.format(len(files)))
+
+    print('Running with {} threads'.format(threads))
+
+    if threads == 1:
+        descriptors = []
+        for imagePath in tqdm(files, desc="Calculating descriptors"):
+            im = cv2.imread(imagePath)
+            kp, des = functionHandleDescriptor(im)
+            if des is not None:
+                descriptors.append(des)
+
+        #flatten list
+        descriptors = list(itertools.chain.from_iterable(descriptors))
+    else:
+        pool = multiprocessing.Pool(threads)
+
+        data = [(f, functionHandleDescriptor) for f in files] # Generate payload to send to threads
+        descriptors = []
+        for descs in tqdm(pool.imap_unordered(getSingleImageDescriptor, data), desc="[{} CPUs] Calculating descriptors".format(threads), total=len(data)):
+            if descs is not None:
+                descriptors.extend(descs)
+        pool.close()
+
     #list to array
     descriptors = np.asarray(descriptors)
 
@@ -41,10 +60,10 @@ def getDescriptors(path,functionHandleDescriptor):
 
 # input
 # training = a set of descriptors
-def  kMeansDictionary(training, k):
+def kMeansDictionary(training, k):
 
     #K-means algorithm
-    est = KMeans(n_clusters=k,init='k-means++',tol=0.0001,verbose=1).fit(training)
+    est = KMeans(n_clusters=k, init='k-means++', tol=0.0001, verbose=1).fit(training)
     #centers = est.cluster_centers_
     #labels = est.labels_
     #est.predict(X)
@@ -68,8 +87,8 @@ def getVLADDescriptors(path,functionHandleDescriptor,visualDictionary):
             v=VLAD(des,visualDictionary)
             descriptors.append(v)
             idImage.append(imagePath)
-                    
-    #list to array    
+
+    #list to array
     descriptors = np.asarray(descriptors)
     return descriptors, idImage
 
@@ -121,25 +140,25 @@ def getVLADDescriptorsPerPDF(path,functionHandleDescriptor,visualDictionary):
 
         #accumulate all pdf's image descriptors in a list
         if (s==sFirst):
-            
+
             im=cv2.imread(imagePath)
             kp,des = functionHandleDescriptor(im)
             if des!=None:
-                desPDF.append(des)   
-            
+                desPDF.append(des)
+
         else:
             docCont=docCont+1
             #compute VLAD for all the descriptors whithin a PDF
             #------------------
-            if len(desPDF)!=0: 
+            if len(desPDF)!=0:
                 docProcessed=docProcessed+1
                 #print("len desPDF: {}".format(len(desPDF)))
-                #flatten list       
+                #flatten list
                 desPDF = list(itertools.chain.from_iterable(desPDF))
                 #list to array
                 desPDF = np.asarray(desPDF)
                 #VLAD per PDF
-                v=VLAD(desPDF,visualDictionary)     
+                v=VLAD(desPDF,visualDictionary)
                 descriptors.append(v)
                 idPDF.append(sFirst)
             #------------------
@@ -153,15 +172,15 @@ def getVLADDescriptorsPerPDF(path,functionHandleDescriptor,visualDictionary):
 
     #Last element
     docCont=docCont+1
-    if len(desPDF)!=0: 
+    if len(desPDF)!=0:
         docProcessed=docProcessed+1
         desPDF = list(itertools.chain.from_iterable(desPDF))
         desPDF = np.asarray(desPDF)
-        v=VLAD(desPDF,visualDictionary)     
+        v=VLAD(desPDF,visualDictionary)
         descriptors.append(v)
         idPDF.append(sFirst)
-                    
-    #list to array    
+
+    #list to array
     descriptors = np.asarray(descriptors)
     print("descriptors: {}".format(descriptors))
     print("idPDF: {}".format(idPDF))
@@ -183,7 +202,7 @@ def VLAD(X,visualDictionary):
     centers = visualDictionary.cluster_centers_
     labels=visualDictionary.labels_
     k=visualDictionary.n_clusters
-   
+
     m,d = X.shape
     V=np.zeros([k,d])
     #computing the differences
@@ -194,7 +213,7 @@ def VLAD(X,visualDictionary):
         if np.sum(predictedLabels==i)>0:
             # add the diferences
             V[i]=np.sum(X[predictedLabels==i,:]-centers[i],axis=0)
-    
+
 
     V = V.flatten()
     # power normalization, also called square-rooting normalization
@@ -215,7 +234,7 @@ def improvedVLAD(X,visualDictionary):
     centers = visualDictionary.cluster_centers_
     labels=visualDictionary.labels_
     k=visualDictionary.n_clusters
-   
+
     m,d = X.shape
     V=np.zeros([k,d])
     #computing the differences
@@ -226,7 +245,7 @@ def improvedVLAD(X,visualDictionary):
         if np.sum(predictedLabels==i)>0:
             # add the diferences
             V[i]=np.sum(X[predictedLabels==i,:]-centers[i],axis=0)
-    
+
 
     V = V.flatten()
     # power normalization, also called square-rooting normalization
@@ -238,7 +257,7 @@ def improvedVLAD(X,visualDictionary):
     return V
 
 def indexBallTree(X,leafSize):
-    tree = BallTree(X, leaf_size=leafSize)              
+    tree = BallTree(X, leaf_size=leafSize)
     return tree
 
 #typeDescriptors =SURF, SIFT, OEB
@@ -255,17 +274,6 @@ def query(image, k,descriptorName, visualDictionary,tree):
     v=VLAD(descriptor,visualDictionary)
 
     #find the k most relevant images
-    dist, ind = tree.query(v, k)    
+    dist, ind = tree.query(v, k)
 
     return dist, ind
-
-
-
-
-
-
-	
-
-
-
-
