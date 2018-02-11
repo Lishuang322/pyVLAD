@@ -10,7 +10,7 @@ import pickle
 import glob
 import cv2
 from VLADlib.Descriptors import *
-
+from tqdm import tqdm
 
 
 # inputs
@@ -20,13 +20,16 @@ from VLADlib.Descriptors import *
 def getDescriptors(path,functionHandleDescriptor):
     descriptors=list()
 
-    for imagePath in glob.glob(path+"/*.jpg"):
+    print('Searching for files...')
+    files = glob.glob(path + "/*.jpg")
+    print('Found {} files...'.format(len(files)))
+    for imagePath in tqdm(files):
         print(imagePath)
         im=cv2.imread(imagePath)
         kp,des = functionHandleDescriptor(im)
-        if des!=None:
+        if des is not None:
             descriptors.append(des)
-            print(len(kp))
+            #print(len(kp))
         
     #flatten list       
     descriptors = list(itertools.chain.from_iterable(descriptors))
