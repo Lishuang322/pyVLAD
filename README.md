@@ -1,4 +1,12 @@
 # VLAD
+
+This is an extended VLAD implementation based on the original implementation by @jorjasso.
+
+**Major changes:**
+- Descriptor extraction is multi-threaded for a linear speedup, using the `--threads` argument (describe.py)
+- Visual Dictionary now uses MiniBatchKMeans instead of the regular implementation which falls over with more than a few thousand images. 
+	- I recommend setting `--batch-size` to something high like 10,000 (note that the number of descriptors will be a few orders of magnitude greater than the number of images, so batch size of 10k with 10k images is fine).
+
 ## Synopsis
 
 Python implementation of VLAD  for a CBIR system. 
