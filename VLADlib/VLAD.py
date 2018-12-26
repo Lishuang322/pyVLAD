@@ -39,6 +39,7 @@ def getDescriptors(path, functionHandleDescriptor, threads):
             kp, des = functionHandleDescriptor(im)
             if des is not None:
                 descriptors.append(des)
+            
 
         #flatten list
         descriptors = list(itertools.chain.from_iterable(descriptors))
@@ -80,14 +81,18 @@ def getVLADDescriptors(path,functionHandleDescriptor,visualDictionary):
     descriptors=list()
     idImage =list()
     for imagePath in glob.glob(path+"/*.jpg"):
-        print(imagePath)
+        
+       
         im=cv2.imread(imagePath)
         kp,des = functionHandleDescriptor(im)
-        if des!=None:
+        if des is not None:
             v=VLAD(des,visualDictionary)
             descriptors.append(v)
             idImage.append(imagePath)
-
+        else:
+            print (imagePath)
+    #print(len(idImage))
+    print(len(descriptors))
     #list to array
     descriptors = np.asarray(descriptors)
     return descriptors, idImage
